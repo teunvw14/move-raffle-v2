@@ -98,7 +98,7 @@ module raffle::raffle {
     }
 
     /// Create a raffle
-    entry fun create_raffle<T>(state: &mut RaffleAppState, initial_liquidity: Coin<T>, ticket_price: u64, duration_s: u64, clock: &Clock, is_giveaway: bool, url: vector<u8>, ctx: &mut TxContext) {
+    entry fun create_raffle<T>(state: &mut RaffleAppState, initial_liquidity: Coin<T>, ticket_price: u64, duration_s: u64, is_giveaway: bool, url: vector<u8>, clock: &Clock, ctx: &mut TxContext) {
 
         assert!(initial_liquidity.value() >= state.min_initial_liquidity, EInsufficientInitialLiquidity);
 
