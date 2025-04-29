@@ -140,7 +140,7 @@ module raffle::raffle {
         ticket
     }
 
-    public fun enterIntoGiveaway<T>(raffle: &mut Raffle<T>, who: address, ctx: &mut TxContext) {
+    public fun enter_into_giveaway<T>(raffle: &mut Raffle<T>, who: address, ctx: &mut TxContext) {
         assert!(raffle.is_giveaway, ERaffleNotGiveaway);
         assert!(raffle.creator == ctx.sender(), ENotGiveawayCreator);
 
