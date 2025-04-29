@@ -26,6 +26,15 @@ module raffle::raffle {
     #[error]
     const EIncorrectTicketPayment: vector<u8> =
         b"Incorrect amount as ticket payment.";
+    #[error]
+    const EGiveAwayDoesNotSupportTicketSale: vector<u8> = 
+        b"Can't buy tickets for a giveaway.";
+    #[error]
+    const ERaffleNotGiveaway: vector<u8> = 
+        b"Can't enter into giveaway since raffle is not a giveaway.";
+    #[error]
+    const ENotGiveawayCreator: vector<u8> = 
+        b"Caller is not creator of the giveaway.";
 
     // Constants
     // 1 bln tokens, for IOTA this is exactly 1 IOTA
@@ -45,12 +54,15 @@ module raffle::raffle {
     /// A raffle. Token `T` will be what is used to buy tickets for that raffle.
     public struct Raffle<phantom T> has key, store {
         id: UID,
+        creator: address,
         raffle_num: u64,
         ticket_price: u64,
         redemption_timestamp_ms: u64,
         prize_money: Balance<T>,
         sold_tickets: vector<ID>,
-        winning_ticket: Option<ID> // set when the raffle is resolved
+        winning_ticket: Option<ID>, // set when the raffle is resolved
+        is_giveaway: bool,
+        url: vector<u8>,
     }
 
     /// A struct representing a ticket in a specific raffle.
@@ -86,7 +98,7 @@ module raffle::raffle {
     }
 
     /// Create a raffle
-    entry fun create_raffle<T>(state: &mut RaffleAppState, initial_liquidity: Coin<T>, ticket_price: u64, duration_s: u64, clock: &Clock, ctx: &mut TxContext) {
+    entry fun create_raffle<T>(state: &mut RaffleAppState, initial_liquidity: Coin<T>, ticket_price: u64, duration_s: u64, clock: &Clock, is_giveaway: bool, url: vector<u8>, ctx: &mut TxContext) {
 
         assert!(initial_liquidity.value() >= state.min_initial_liquidity, EInsufficientInitialLiquidity);
 
@@ -95,11 +107,14 @@ module raffle::raffle {
         let raffle = Raffle<T> {
             id: object::new(ctx),
             raffle_num,
+            creator: ctx.sender(),
             ticket_price,
             redemption_timestamp_ms,
             prize_money: initial_liquidity.into_balance(),
             sold_tickets: vector[],
-            winning_ticket: option::none()
+            winning_ticket: option::none(),
+            is_giveaway,
+            url,
         };
         state.raffles.push_back(raffle.id.to_inner());
         state.raffles_created_count = raffle_num;
@@ -111,6 +126,7 @@ module raffle::raffle {
     }
 
     public fun buy_ticket<T>(raffle: &mut Raffle<T>, payment_coin: Coin<T>, ctx: &mut TxContext): RaffleTicket {
+        assert!(!raffle.is_giveaway, EGiveAwayDoesNotSupportTicketSale);
         assert!(!raffle.is_resolved(), ERaffleAlreadyResolved);
         assert!(payment_coin.value() == raffle.ticket_price, EIncorrectTicketPayment);
 
@@ -122,6 +138,16 @@ module raffle::raffle {
         raffle.sold_tickets.push_back(ticket_id.to_inner());
         let ticket = RaffleTicket { id: ticket_id };
         ticket
+    }
+
+    public fun enterIntoGiveaway<T>(raffle: &mut Raffle<T>, who: address, ctx: &mut TxContext) {
+        assert!(raffle.is_giveaway, ERaffleNotGiveaway);
+        assert!(raffle.creator == ctx.sender(), ENotGiveawayCreator);
+
+        let ticket_id = object::new(ctx);
+        raffle.sold_tickets.push_back(ticket_id.to_inner());
+        let ticket = RaffleTicket { id: ticket_id };
+        transfer::transfer(ticket, who);
     }
 
     /// Resolve the raffle (decide who wins)
